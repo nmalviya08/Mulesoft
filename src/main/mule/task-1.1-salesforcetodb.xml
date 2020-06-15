@@ -96,7 +96,7 @@ Department: $.Department
            ,:Description 
            ,:Department )]]></db:sql>
 		</db:bulk-insert>
-		<logger level="INFO" doc:name="Logger" doc:id="4ebae998-343f-4dc4-9b12-2efc5b9008ff" message="Data Inserted"/>
+		<logger level="INFO" doc:name="Logger" doc:id="4ebae998-343f-4dc4-9b12-2efc5b9008ff" message="Data Inserted successfully"/>
 		<ee:transform doc:name="Transform Message" doc:id="88741b5d-4b7f-4e4d-9bb4-654c19e17266" >
 			<ee:message >
 				<ee:set-payload ><![CDATA[%dw 2.0
