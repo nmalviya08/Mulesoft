@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="e39b2241-74cb-4d55-af65-86f4ced925d0" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="5cc447a3-69f4-4ae5-a500-41379f381653" >
+		<salesforce:basic-connection username="${sfdc.username}" password="${sfdc.password}" securityToken="${sfdc.token}" url="${sfdc.loginurl}"/>
+	</salesforce:sfdc-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="b8ff40bd-91da-4f80-9ec5-69e1c17ffc01" file="config.properties" />
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="7cae465b-2396-4d56-8b16-23d90d86b051" >
+		<db:mssql-connection host="192.168.43.51" instanceName="SQL2016DEV" port="59199" user="Nishi" password="Nishi@12345678" databaseName="EmployeeDB"/>
+	</db:config>
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="6c60bb31-bebd-4daa-8186-58c343e3e191" />
+	<os:object-store name="Object_store1" doc:name="Object store" doc:id="0d69b211-3554-4f11-b104-846507acff12" />
+	<flow name="demo-salesforceFlow" doc:id="2c83c5df-0188-445a-b6d2-e03f5bac8979" >
+		<http:listener doc:name="/salesforce Listener" doc:id="dbe37f1f-f671-42d9-abac-af9a76ac9e06" config-ref="HTTP_Listener_config" path="/salesforcec"/>
+		<os:retrieve key="watermark" objectStore="Object_store1" target="watermark">
+    <os:default-value><![CDATA[#['2018-09-11T00:00:00.000Z']]]></os:default-value>
+  </os:retrieve>
+		<salesforce:query doc:name="Query" doc:id="b5b62dc3-a42b-48e6-853a-9f4d39f2e90e" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query ><![CDATA[select id, Firstname, LastName, email, phone,CreatedDate,AccountId,LastModifiedDate,Birthdate,Description,Department from Contact where LastModifiedDate>:LastModifiedDate]]></salesforce:salesforce-query>
+			<salesforce:parameters ><![CDATA[#[output application/java
+---
+{
+	LastModifiedDate : vars.watermark
+}]]]></salesforce:parameters>
+		
+</salesforce:query>
+		<ee:transform doc:name="Transform Message" doc:id="bf0b0b3a-5b8f-4b20-b0c0-0d2c3faeeba2" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="lastrun" ><![CDATA[%dw 2.0
+output application/java
+---
+
+ (now()  >> "UTC") as String {format: "yyyy-MM-dd'T'HH:mm:ssZ"}
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<os:store doc:name="Store" doc:id="3eae6db0-1b04-46d5-a8bc-c581ff2e9941" key="watermark" objectStore="Object_store1" failOnNullValue="false">
+			<os:value><![CDATA[#[vars.lastrun]]]></os:value>
+		</os:store>
+		<ee:transform doc:name="Transform Message" doc:id="a80e485c-7133-43a5-97d3-c16c35eec710" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+
+payload map 
+             {Id: $.Id,
+Firstname: $.FirstName,
+LastName: $.LastName ,
+email: $.Email,
+phone: $.Phone,
+CreatedDate: $.CreatedDate,
+AccountId: $.AccountId,
+LastModifiedDate: $.LastModifiedDate,
+Birthdate: $.Birthdate,
+Description: $.Description,
+Department: $.Department
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<db:bulk-insert doc:name="Bulk insert" doc:id="63f5bea8-21b4-45f2-90c2-ddaea24d7ffa" config-ref="Database_Config">
+			<db:sql ><![CDATA[INSERT INTO [Contacts]
+           ([Id]
+           ,[Firstname]
+           ,[LastName]
+           ,[email]
+           ,[phone]
+           ,[CreatedDate]
+           ,[AccountId]
+           ,[LastModifiedDate]
+           ,[Birthdate]
+           ,[Description]
+           ,[Department])
+     VALUES
+           (:Id
+           ,:Firstname
+           ,:LastName 
+           ,:email 
+           ,:phone
+           ,:CreatedDate 
+           ,:AccountId
+           ,:LastModifiedDate
+           ,:Birthdate
+           ,:Description 
+           ,:Department )]]></db:sql>
+		</db:bulk-insert>
+		<logger level="INFO" doc:name="Logger" doc:id="4ebae998-343f-4dc4-9b12-2efc5b9008ff" message="Data Inserted"/>
+		<ee:transform doc:name="Transform Message" doc:id="88741b5d-4b7f-4e4d-9bb4-654c19e17266" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
